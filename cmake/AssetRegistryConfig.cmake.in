@@ -1,0 +1,9 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+if(NOT TARGET AssetRegistry::AssetRegistry)
+    include("${CMAKE_CURRENT_LIST_DIR}/AssetRegistryTargets.cmake")
+endif()
+
+check_required_components(AssetRegistry)

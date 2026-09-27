@@ -1,0 +1,32 @@
+Asset Registry
+Copyright 2026 Summon Software Labs
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Asset Registry is an authoritative physical asset inventory and lifecycle registry
+for DCCP Tranche 1. It is built from the C++20 standard library only.
+
+Third-party components
+----------------------
+
+None. No third-party source code, library, header, or generated artefact is
+included in, linked into, or required by this product.
+
+The build depends only on the platform's own toolchain and operating system:
+
+  * the C++20 standard library of the toolchain that builds the project;
+  * the operating system's cryptographic random generator, used for identity
+    entropy and reached through the platform API (BCryptGenRandom on Windows,
+    the platform entropy source elsewhere);
+  * the operating system's file and locking primitives, used for the durable
+    store.
+
+No network service, telemetry endpoint, analytics library, or runtime package
+manager is contacted or required at build time or at run time.
+
+Trademarks
+----------
+
+All product names, trademarks, and registered trademarks mentioned in this
+repository are the property of their respective owners and are used only for
+identification purposes.

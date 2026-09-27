@@ -1,0 +1,12 @@
+# Line endings are normalised in the repository and checked out as LF everywhere, so a
+# checkout is byte-identical on every platform and no source file's contents depend on the
+# machine that cloned it.
+* text=auto eol=lf
+
+# Binary artefacts are never normalised, whatever they are added as.
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
