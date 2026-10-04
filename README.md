@@ -1,6 +1,6 @@
 # Asset Registry
 
-Authoritative physical asset inventory and lifecycle registry for DCCP Tranche 1.
+Authoritative physical asset inventory and lifecycle registry.
 
 The registry answers one question for a facility: *what physical objects exist, where are
 they, what state are they in, and what evidence supports that?* It stores that answer as a
