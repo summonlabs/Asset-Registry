@@ -139,7 +139,24 @@ int do_register(const std::filesystem::path& directory, const std::string& write
 
 int do_hold(const std::filesystem::path& directory, const std::string& writer_name, int milliseconds) {
     RecoveryReport report;
-    auto registry = open_store(directory, report, false);
+    // A test that probes for the hold with short-lived writers may hold the store
+    // itself at the instant this process opens it. The hold waits for such a
+    // writer (bounded, about 10 s) instead of giving up, or nothing would ever
+    // hold the store and the probe would wait for a hold that never comes.
+    std::shared_ptr<AssetRegistry> registry;
+    for (int attempt = 0; attempt < 2000 && registry == nullptr; ++attempt) {
+        StoreOpenOptions options;
+        options.initial_writer = "multiprocess-helper";
+        auto opened = AssetRegistry::open(directory, StoreOpenMode::CreateIfMissing, options, report);
+        if (opened) {
+            registry = opened.value();
+            break;
+        }
+        if (opened.error().code() != ErrorCode::StoreLocked) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
     if (registry == nullptr) {
         std::fprintf(stderr, "hold could not open the store\n");
         return 4;

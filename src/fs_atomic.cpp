@@ -120,8 +120,29 @@ bool is_safe_relative_name(std::string_view name) noexcept {
 
 Outcome<void> write_file_flushed(const std::filesystem::path& path, std::string_view bytes) {
 #ifdef _WIN32
-    const HANDLE handle =
-        ::CreateFileW(path.wstring().c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    // While a reader has the file open (an inspection, a backup, an antivirus or
+    // indexing scan) the create fails with a sharing error until the reader closes
+    // it, so it is retried for a bounded time (about 2 s). A directory in the way
+    // is not transient and fails at once.
+    HANDLE handle = INVALID_HANDLE_VALUE;
+    for (int attempt = 0;; ++attempt) {
+        handle = ::CreateFileW(path.wstring().c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                               FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (handle != INVALID_HANDLE_VALUE) {
+            break;
+        }
+        const DWORD last_error = ::GetLastError();
+        const DWORD attributes = ::GetFileAttributesW(path.wstring().c_str());
+        const bool directory =
+            attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        const bool transient = (last_error == ERROR_ACCESS_DENIED || last_error == ERROR_SHARING_VIOLATION ||
+                                last_error == ERROR_LOCK_VIOLATION) &&
+                               !directory;
+        if (!transient || attempt >= 100) {
+            break;
+        }
+        ::Sleep(20);
+    }
     if (handle == INVALID_HANDLE_VALUE) {
         return make_error(ErrorCode::StoreIoError,
                           "cannot create file: " + path.string() + ": " + last_system_error());

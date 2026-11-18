@@ -13,9 +13,17 @@ asset_registry_place_library(ar_example_export_consumer)
 
 # The examples are part of validation, not decoration: each runs as a test, and the
 # walkthrough then validates its own store with the CLI.
+#
+# The walkthrough registers fixed identities, so it needs an empty store: a store
+# left by an earlier ctest run in this build directory is removed first.
+add_test(NAME ar_example_lifecycle_fresh_store
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${CMAKE_CURRENT_BINARY_DIR}/example-store")
+set_tests_properties(ar_example_lifecycle_fresh_store PROPERTIES
+    FIXTURES_SETUP ar_example_lifecycle_store LABELS "asset-registry")
 add_test(NAME ar_example_lifecycle COMMAND ar_example_lifecycle
     "${CMAKE_CURRENT_BINARY_DIR}/example-store")
-set_tests_properties(ar_example_lifecycle PROPERTIES LABELS "asset-registry")
+set_tests_properties(ar_example_lifecycle PROPERTIES
+    FIXTURES_REQUIRED ar_example_lifecycle_store LABELS "asset-registry")
 
 add_test(NAME ar_example_export_round_trip
     COMMAND ${CMAKE_COMMAND}

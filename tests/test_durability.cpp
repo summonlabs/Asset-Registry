@@ -7,6 +7,7 @@
 // Every test in this file exercises real files through the real store: nothing is
 // simulated, and the reopen paths go through the same open() a new process uses.
 
+#include <chrono>
 #include <cstdio>
 #include <fstream>
 #include <string>
@@ -515,4 +516,80 @@ AR_TEST(durability, a_failed_commit_leaves_the_published_state_unchanged) {
     AR_REQUIRE_ERROR(grant_error, session, ErrorCode::AuthorityRevoked);
     AR_CHECK(read_only->snapshot().published_sequence() == sequence_before);
     AR_CHECK(read_only->close().has_value());
+}
+
+AR_TEST(durability, a_commit_waits_for_a_reader_of_the_current_pointer) {
+    TempDirectory directory("durable-pointer-reader");
+    seed_store(directory.path(), 2);
+    bool reader_opened = false;
+    bool registered = false;
+    std::size_t published = 0;
+    bool closed = false;
+    {
+        auto context = open_registry(directory.path());
+        {
+            // Another tool reading the store (an inspection, a backup, a scan) holds
+            // the CURRENT pointer open while the next commit rewrites it, and closes
+            // it shortly after.
+            std::ifstream reader(directory.file("CURRENT"), std::ios::binary);
+            reader_opened = reader.is_open();
+            std::thread writer([&context, &registered] {
+                registered = context.registry
+                                 ->register_asset(context.session, context.session.advance(),
+                                                  make_request("durable-reader", AssetClass::Server, "Acme",
+                                                               "SN-reader"))
+                                 .has_value();
+            });
+            std::this_thread::sleep_for(std::chrono::milliseconds(300));
+            reader.close();
+            writer.join();
+        }
+        published = context.registry->snapshot().size();
+        closed = context.registry->close().has_value();
+    }
+    AR_CHECK(reader_opened);
+    // The pointer write waits for the reader instead of failing the commit.
+    AR_CHECK(registered);
+    AR_CHECK(published == 3);
+    AR_CHECK(closed);
+    auto context = open_registry(directory.path());
+    AR_CHECK(context.report.action == RecoveryAction::None);
+    AR_CHECK(context.registry->snapshot().size() == 3);
+    AR_CHECK(context.registry->close().has_value());
+}
+
+AR_TEST(durability, a_commit_whose_pointer_write_failed_is_not_adopted_by_a_later_open) {
+    TempDirectory directory("durable-pointer-held");
+    seed_store(directory.path(), 2);
+    bool reader_opened = false;
+    bool refused = false;
+    std::size_t published = 0;
+    bool closed = false;
+    {
+        auto context = open_registry(directory.path());
+        {
+            // A reader that keeps the CURRENT pointer open for longer than the write
+            // waits makes the commit fail; the caller is told so.
+            std::ifstream reader(directory.file("CURRENT"), std::ios::binary);
+            reader_opened = reader.is_open();
+            refused = !context.registry
+                           ->register_asset(context.session, context.session.advance(),
+                                            make_request("durable-held", AssetClass::Server, "Acme", "SN-held"))
+                           .has_value();
+        }
+        published = context.registry->snapshot().size();
+        closed = context.registry->close().has_value();
+    }
+    AR_CHECK(reader_opened);
+    AR_CHECK(refused);
+    AR_CHECK(published == 2);
+    AR_CHECK(closed);
+    // The failed commit had already published its generation file. A later open
+    // must not adopt it: the inventory is the one the last successful commit
+    // left, and nothing needed recovering.
+    auto context = open_registry(directory.path());
+    AR_CHECK(context.report.action == RecoveryAction::None);
+    AR_CHECK(context.registry->snapshot().size() == 2);
+    AR_CHECK(!context.registry->snapshot().find(asset_id_for("durable-held")).has_value());
+    AR_CHECK(context.registry->close().has_value());
 }

@@ -94,7 +94,9 @@ endif()
 set(ASSET_REGISTRY_SANITIZER_FLAGS "")
 if(ASSET_REGISTRY_SANITIZE STREQUAL "address")
     if(MSVC)
-        list(APPEND ASSET_REGISTRY_SANITIZER_FLAGS /fsanitize=address)
+        # Debug information is required: without it MSVC warns C5072 for every
+        # source, which ASSET_REGISTRY_WARNINGS_AS_ERRORS turns into an error.
+        list(APPEND ASSET_REGISTRY_SANITIZER_FLAGS /fsanitize=address /Zi)
         # MSVC address sanitizer requires the dynamic runtime.
         set(ASSET_REGISTRY_MSVC_ASAN_RUNTIME ON)
     else()
@@ -119,7 +121,9 @@ if(ASSET_REGISTRY_SANITIZER_FLAGS)
         # makes the linker warn about an option it does not recognise. Incremental linking
         # is incompatible with that metadata, so it is turned off here rather than left for
         # the linker to refuse with a warning.
-        target_link_options(asset_registry_sanitizer INTERFACE /INCREMENTAL:NO)
+        # /DEBUG keeps the debug information of the sanitizer objects (LNK4302
+        # without it).
+        target_link_options(asset_registry_sanitizer INTERFACE /INCREMENTAL:NO /DEBUG)
     else()
         # GCC and Clang select the sanitizer runtime at link time, so the flag belongs
         # there as well as on the compile line.
@@ -210,7 +214,7 @@ target_link_libraries(asset_registry_objects
     PRIVATE AssetRegistry::warnings AssetRegistry::sanitizer)
 
 if(ASSET_REGISTRY_MSVC_ASAN_RUNTIME)
-    target_compile_options(asset_registry_objects PRIVATE /fsanitize=address)
+    target_compile_options(asset_registry_objects PRIVATE /fsanitize=address /Zi)
 endif()
 
 if(WIN32 AND ASSET_REGISTRY_BUILD_SHARED)
@@ -249,7 +253,7 @@ target_link_libraries(AssetRegistry
     PRIVATE AssetRegistry::sanitizer AssetRegistry::warnings)
 
 if(ASSET_REGISTRY_MSVC_ASAN_RUNTIME)
-    target_compile_options(AssetRegistry PRIVATE /fsanitize=address)
+    target_compile_options(AssetRegistry PRIVATE /fsanitize=address /Zi)
 endif()
 
 if(WIN32)

@@ -1045,6 +1045,9 @@ Outcome<TransactionSequence> StoreAccess::commit(Store& store, internal::StorePa
     const Outcome<void> pointed =
         internal::write_file_flushed(impl.root / std::string(kCurrentFileName), encode_current(next));
     if (!pointed) {
+        // The generation published above must not stay behind: an open adopts the
+        // newest valid generation, so it would bring this failed commit back.
+        (void)internal::remove_file(destination);
         return pointed.error();
     }
     impl.meta.sequence = next.value();
